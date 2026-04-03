@@ -24,6 +24,7 @@ def matmul_add_matmul_add(
     x1: pl.Tensor[[64, 64], pl.FP32],
     x2: pl.Tensor[[64, 64], pl.FP32],
     out: pl.Tensor[[64, 64], pl.FP32],
+    workspace: pl.Tensor[[64, 64], pl.FP32],
 ) -> pl.Tensor[[64, 64], pl.FP32]:
     tile_p_vec = plm.TileType(shape=[32, 64], dtype=pl.FP32, target_memory=pl.MemorySpace.Vec)
     mm1_res = plm.make_tile(tile_p_vec, addr=0x0000, size=8192)
@@ -69,7 +70,8 @@ def matmul_add_matmul_add(
 
         pl.system.sync_src(set_pipe=pl.PipeType.M, wait_pipe=pl.PipeType.FIX, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.M, wait_pipe=pl.PipeType.FIX, event_id=0)
-        plm.move(mm1_res, tile_c1, acc_to_vec_mode="dual_split_m")  # ACC -> UB
+        # plm.move(mm1_res, tile_c1, acc_to_vec_mode="dual_split_m")  # ACC -> UB
+        plm.l0c_store(tile_c1, [0, 0], [64, 64], workspace)  # L0C2GM
         pl.system.set_cross_core(pipe=pl.PipeType.FIX, event_id=0)
 
         plm.load(v_mat, v, [0, 0])
@@ -105,9 +107,11 @@ def matmul_add_matmul_add(
         off = sub_index * 32
         plm.load(tile_x1, x1, [off, 0])
 
+        pl.system.wait_cross_core(pipe=pl.PipeType.MTE2, event_id=0)
+        plm.load(mm1_res, workspace, [off, 0])
+
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=1)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=1)
-        pl.system.wait_cross_core(pipe=pl.PipeType.V, event_id=0)
 
         plm.add(tile_out, mm1_res, tile_x1)
         plm.move(tile_nz, tile_out)  # ND2NZ
@@ -156,8 +160,9 @@ def test_matmul_add_matmul_add():
     x1 = torch.randn(shape, device=device, dtype=dtype)
     x2 = torch.randn(shape, device=device, dtype=dtype)
     out = torch.zeros(shape, device=device, dtype=dtype)
+    workspace = torch.zeros(shape, device=device, dtype=dtype)  # bmm1
 
-    fe.launch(None, 1, compiled_lib, q, k, v, x1, x2, out)
+    fe.launch(None, 1, compiled_lib, q, k, v, x1, x2, out, workspace)
     torch.npu.synchronize()
 
     c1 = torch.matmul(q, k)

@@ -25,7 +25,7 @@ def matmul_add_matmul_add(
     x2: pl.Tensor[[64, 64], pl.FP32],
     out: pl.Tensor[[64, 64], pl.FP32],
 ) -> pl.Tensor[[64, 64], pl.FP32]:
-    tile_p_vec = plm.TileType(shape=[32, 64], dtype=pl.FP32, target_memory=pl.MemorySpace.Vec)
+    tile_p_vec = plm.TileType(shape=[32, 64], dtype=pl.FP32, target_memory=pl.MemorySpace.Vec, blayout=2, slayout=1)
     mm1_res = plm.make_tile(tile_p_vec, addr=0x0000, size=8192)
 
     tile_p_vec = plm.TileType(shape=[32, 64], dtype=pl.FP32, target_memory=pl.MemorySpace.Vec)
@@ -95,22 +95,27 @@ def matmul_add_matmul_add(
         tile_type_x1 = plm.TileType(shape=[32, 64], dtype=pl.FP32, target_memory=pl.MemorySpace.Vec)
         tile_x1 = plm.make_tile(tile_type_x1, addr=0x4000, size=8192)
         tile_x2 = plm.make_tile(tile_type_x1, addr=0x6000, size=8192)
+        tile_x1_nz = plm.make_tile(tile_type_x1, addr=0x14000, size=8192)
 
         tile_type_out = plm.TileType(shape=[32, 64], dtype=pl.FP32, target_memory=pl.MemorySpace.Vec)
         tile_out = plm.make_tile(tile_type_out, addr=0x8000, size=8192)
 
-        tile_type_nz = plm.TileType(shape=[33, 64], dtype=pl.FP32, target_memory=pl.MemorySpace.Vec, valid_shape=[32, 64], blayout=2, slayout=1)
+        tile_type_nz = plm.TileType(shape=[32, 64], dtype=pl.FP32, target_memory=pl.MemorySpace.Vec, valid_shape=[32, 64], blayout=2, slayout=1)
         tile_nz = plm.make_tile(tile_type_nz, addr=0xA000, size=8448)  # NZ no bank conflict
+        # tile_X1_nz = plm.make_tile(tile_type_nz, addr=0x14000, size=8448)  # NZ no bank conflict
 
         off = sub_index * 32
-        plm.load(tile_x1, x1, [off, 0])
+        plm.load(tile_x1, x1, [off, 0])  # ND
+        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=1)
+        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=1)
+        plm.move(tile_x1_nz, tile_x1)  # NZ BANK CONFLICT
 
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=1)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=1)
         pl.system.wait_cross_core(pipe=pl.PipeType.V, event_id=0)
 
-        plm.add(tile_out, mm1_res, tile_x1)
-        plm.move(tile_nz, tile_out)  # ND2NZ
+        plm.add(tile_nz, mm1_res, tile_x1_nz)
+        # plm.move(tile_nz, tile_out)  # ND2NZ
 
         pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=2)
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=2)

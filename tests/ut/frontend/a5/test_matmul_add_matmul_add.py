@@ -86,7 +86,7 @@ def matmul_add_matmul_add(
 
         pl.system.sync_src(set_pipe=pl.PipeType.M, wait_pipe=pl.PipeType.FIX, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.M, wait_pipe=pl.PipeType.FIX, event_id=0)
-        plm.move(mm2_res, tile_c2, acc_to_vec_mode="dual_split_m")  # ACC -> UB
+        plm.move(mm2_res, tile_c2, acc_to_vec_mode="dual_split_m", relu_pre_mode="no_relu")  # ACC -> UB
         pl.system.set_cross_core(pipe=pl.PipeType.FIX, event_id=1)
 
     with pl.section_vector():

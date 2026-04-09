@@ -400,6 +400,8 @@ def move(
     out: Tile,
     tile: Tile,
     acc_to_vec_mode: Literal["single_vec0", "single_vec1", "dual_split_m", "dual_split_n"] | None = None,
+    relu_pre_mode: Literal["no_relu", "normal_relu"] | None = None,
+    pre_quant_scalar: int | None = None,
 ) -> None:
     """Move a tile between memory levels, writing into a pre-allocated buffer.
 
@@ -414,10 +416,18 @@ def move(
             - "single_vec1": SingleModeVec1
             - "dual_split_m": DualModeSplitM
             - "dual_split_n": DualModeSplitN
+        relu_pre_mode: ReluPreMode for TMOV (optional).
+            - "no_relu": NoRelu (default)
+            - "normal_relu": NormalRelu
+        pre_quant_scalar: Pre-quantization scalar value (optional).
     """
     kwargs = {}
     if acc_to_vec_mode is not None:
         kwargs["acc_to_vec_mode"] = acc_to_vec_mode
+    if relu_pre_mode is not None:
+        kwargs["relu_pre_mode"] = relu_pre_mode
+    if pre_quant_scalar is not None:
+        kwargs["pre_quant_scalar"] = pre_quant_scalar
     _op("manual.move", [tile.unwrap()], out, **kwargs)
 
 

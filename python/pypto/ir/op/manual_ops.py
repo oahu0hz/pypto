@@ -60,6 +60,8 @@ def move(
     src: Expr,
     span: Span | None = None,
     acc_to_vec_mode: str | None = None,
+    relu_pre_mode: str | None = None,
+    pre_quant_scalar: int | None = None,
 ) -> Call:
     """Build manual.move IR call.
 
@@ -68,6 +70,8 @@ def move(
         src: Source tile expression.
         span: Optional source span.
         acc_to_vec_mode: AccToVecMode string for Acc->Vec transfers.
+        relu_pre_mode: ReluPreMode string for TMOV.
+        pre_quant_scalar: Pre-quantization scalar value.
 
     Returns:
         Call expression for manual.move.
@@ -76,6 +80,10 @@ def move(
     kwargs: dict = {}
     if acc_to_vec_mode is not None:
         kwargs["acc_to_vec_mode"] = acc_to_vec_mode
+    if relu_pre_mode is not None:
+        kwargs["relu_pre_mode"] = relu_pre_mode
+    if pre_quant_scalar is not None:
+        kwargs["pre_quant_scalar"] = pre_quant_scalar
     return _ir_core.create_op_call(
         "manual.move", [src, out], kwargs, actual_span
     )

@@ -127,6 +127,9 @@ REGISTER_OP("manual.move")
         "The TMOV variant is determined by the output tile's memory space.")
     .add_argument("src", "Source tile (TileType)")
     .add_argument("out", "Pre-allocated destination tile (TileType)")
+    .set_attr<std::string>("acc_to_vec_mode")
+    .set_attr<std::string>("relu_pre_mode")
+    .set_attr<int>("pre_quant_scalar")
     .f_deduce_type([](const std::vector<ExprPtr>& args,
                       const std::vector<std::pair<std::string, std::any>>& kwargs) {
       CHECK(args.size() == 2)
